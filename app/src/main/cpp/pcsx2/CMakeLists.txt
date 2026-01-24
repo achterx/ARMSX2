@@ -1152,7 +1152,13 @@ target_link_libraries(PCSX2_FLAGS INTERFACE
 	ZLIB::ZLIB
 	LZ4::LZ4
 	SoundTouch::SoundTouch
-	PNG::PNG
+	# PNG is optional - not available on Android NDK by default
+if(TARGET PNG::PNG)
+	target_link_libraries(PCSX2_FLAGS INTERFACE PNG::PNG)
+else()
+	message(WARNING "PNG library not found - PNG screenshot/texture features will be disabled")
+	target_compile_definitions(PCSX2_FLAGS INTERFACE PCSX2_NO_PNG_SUPPORT)
+endif()
 	LZMA::LZMA
 	Zstd::Zstd
 	demanglegnu
@@ -1185,10 +1191,13 @@ if(WIN32)
 		dwmapi.lib
 		OneCore.lib
 	)
-else()
-	target_link_libraries(PCSX2_FLAGS INTERFACE
-		PCAP::PCAP
-	)
+elseif(NOT ANDROID)
+	# PCAP is only available on desktop platforms (Linux/BSD/Mac), not Android
+	if(TARGET PCAP::PCAP)
+		target_link_libraries(PCSX2_FLAGS INTERFACE PCAP::PCAP)
+	else()
+		message(WARNING "PCAP library not found - DEV9 network capture will be limited")
+	endif()
 endif()
 
 # additonal include directories
