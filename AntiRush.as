@@ -1315,7 +1315,6 @@ class CEnvironmentFlyingKey : ScriptBaseAnimating {
 
         CTrainPathNode@ pNode = FindNode(m_lpszCurrentNode);
         if (pNode is null) {
-            m_bActive = false;
             self.pev.nextthink = flNow + 0.1f;
             return;
         }
@@ -1333,9 +1332,6 @@ class CEnvironmentFlyingKey : ScriptBaseAnimating {
                 AR_UTIL_TargetEntity(pNode.m_lpszFireOnPass, @self, @self);
             }
             m_lpszCurrentNode = pNode.m_lpszNextNode;
-            if (FindNode(m_lpszCurrentNode) is null) {
-                m_bActive = false;
-            }
         } else {
             Vector vecDir = vecDelta / flDist;
             g_EntityFuncs.SetOrigin(self, self.pev.origin + vecDir * flStep);
