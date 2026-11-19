@@ -1339,7 +1339,7 @@ class CEnvironmentFlyingKey : ScriptBaseAnimating {
         } else {
             Vector vecDir = vecDelta / flDist;
             g_EntityFuncs.SetOrigin(self, self.pev.origin + vecDir * flStep);
-            self.pev.angles.y = atan2(vecDir.y, vecDir.x) * 57.2957795f - 180.0f;
+            self.pev.angles.y = atan2(vecDir.y, vecDir.x) * 57.2957795f;
         }
 
         self.pev.nextthink = flNow + 0.01f;
