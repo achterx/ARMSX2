@@ -159,8 +159,6 @@ void AR_CMD_Reload(const CCommand@ _Args) {
     
     if (pMap is null) return;
     
-    pMap.PlacePathNodes();
-    pMap.PlaceKeys();
     pMap.PlaceTimers();
     
     if (pMap.m_rglpSecondTargetNameStuff.length() == 0 && pMap.m_rglpSecondTargetNameMovedOutStuff.length() == 0) return;
@@ -1267,91 +1265,114 @@ class CEnvironmentFlyingKey : ScriptBaseAnimating {
     CBaseEntity@ m_pTheTrain;
     float m_flSpeed;
     string m_lpszFirstNode;
+    string m_lpszCurrentNode;
+    float m_flLastThinkTime;
     bool m_bActive;
     Vector m_vecColour;
     bool m_bActivated;
-	string m_lpszTramTargetName;
-    
+    string m_lpszTramTargetName;
+
+    CTrainPathNode@ FindNode(const string& in _Name) {
+        if (_Name.IsEmpty() || g_pCurrentMap is null) return null;
+        for (uint idx = 0; idx < g_pCurrentMap.m_rglpNodes.length(); idx++) {
+            CTrainPathNode@ pNode = @g_pCurrentMap.m_rglpNodes[idx];
+            if (pNode.m_lpszTargetName == _Name) return pNode;
+        }
+        return null;
+    }
+
     void Precache() {
         BaseClass.Precache();
     }
-    
+
     void Spawn() {
         Precache();
-        
+
         m_bActivated = false;
-        
+        m_bActive = false;
+        m_flSpeed = 256.0f;
+        m_lpszCurrentNode = m_lpszFirstNode;
+        m_flLastThinkTime = g_Engine.time;
+
         self.pev.movetype = MOVETYPE_NONE;
         self.pev.solid = SOLID_NOT;
         float flHUE = AR_UTIL_RGB2HUE(m_vecColour) * 255.f;
         self.pev.colormap = AR_UTIL_PackColormap(uint8(flHUE), uint8(flHUE));
-        
-        dictionary kvs;
-        kvs["origin"] = string(self.pev.origin.x) + " " + string(self.pev.origin.y) + " " + string(self.pev.origin.z);
-        kvs["speed"] = "256";
-        kvs["rendermode"] = "1"; //Color
-        kvs["renderamt"] = "0";
-        kvs["spawnflags"] = "10"; //No User Control | Passable
-        kvs["wheels"] = "32";
-        kvs["target"] = m_lpszFirstNode;
-        kvs["targetname"] = m_lpszTramTargetName.IsEmpty() ? (string(self.pev.targetname) + "_tram") : m_lpszTramTargetName;
-        
-        @m_pTheTrain = g_EntityFuncs.CreateEntity("func_tracktrain", @kvs, false);
-        m_pTheTrain.pev.effects |= (EF_NOINTERP | EF_NODECALS | EF_NOANIMTEXTURES | EF_NODRAW);
-        g_EntityFuncs.DispatchSpawn(m_pTheTrain.edict());
-        m_pTheTrain.Activate();
-        m_pTheTrain.pev.mins = m_pTheTrain.pev.maxs = m_pTheTrain.pev.absmin = m_pTheTrain.pev.absmax = g_vecZero;
-        m_pTheTrain.pev.effects |= (EF_NOINTERP | EF_NODECALS | EF_NOANIMTEXTURES | EF_NODRAW); //TBH I dunno if effects can be set pre-Spawn but I'm sure they can be set after Spawn, so yeah.
-        
+
         self.pev.nextthink = g_Engine.time + 0.1f;
     }
-    
+
     void Think() {
-        if (m_pTheTrain is null || !m_bActive) {
-            self.pev.nextthink = g_Engine.time + 0.1f;
-        
+        float flNow = g_Engine.time;
+        float flDt = flNow - m_flLastThinkTime;
+        m_flLastThinkTime = flNow;
+        if (flDt <= 0.0f || flDt > 0.25f) flDt = 0.01f;
+
+        if (!m_bActive) {
+            self.pev.nextthink = flNow + 0.1f;
             return;
         }
-        
-        self.pev.angles = m_pTheTrain.pev.angles;
-        self.pev.angles.y = self.pev.angles.y - 180.f;
-        g_EntityFuncs.SetOrigin(self, m_pTheTrain.pev.origin);
-        
-        self.pev.nextthink = g_Engine.time + 0.01f;
+
+        CTrainPathNode@ pNode = FindNode(m_lpszCurrentNode);
+        if (pNode is null) {
+            m_bActive = false;
+            self.pev.nextthink = flNow + 0.1f;
+            return;
+        }
+
+        Vector vecDelta = pNode.m_vecPosition - self.pev.origin;
+        float flDist = vecDelta.Length();
+        float flStep = m_flSpeed * flDt;
+
+        if (flDist <= flStep || flDist < 1.0f) {
+            g_EntityFuncs.SetOrigin(self, pNode.m_vecPosition);
+            if (pNode.m_flSpeed > 0.0f) {
+                m_flSpeed = pNode.m_flSpeed;
+            }
+            if (!pNode.m_lpszFireOnPass.IsEmpty()) {
+                AR_UTIL_TargetEntity(pNode.m_lpszFireOnPass, @self, @self);
+            }
+            m_lpszCurrentNode = pNode.m_lpszNextNode;
+            if (FindNode(m_lpszCurrentNode) is null) {
+                m_bActive = false;
+            }
+        } else {
+            Vector vecDir = vecDelta / flDist;
+            g_EntityFuncs.SetOrigin(self, self.pev.origin + vecDir * flStep);
+            self.pev.angles.y = atan2(vecDir.y, vecDir.x) * 57.2957795f - 180.0f;
+        }
+
+        self.pev.nextthink = flNow + 0.01f;
     }
-    
+
     void TurnOn() {
         m_bActivated = false;
         self.pev.renderamt = 255;
         self.pev.rendermode = kRenderNormal;
         self.pev.effects &= ~EF_NODRAW;
     }
-    
+
     void TurnOff() {
         m_bActivated = true;
         self.pev.renderamt = 0;
         self.pev.rendermode = kRenderTransColor;
         self.pev.effects |= EF_NODRAW;
     }
-    
+
     void Use(CBaseEntity@ _Activator, CBaseEntity@ _Caller, USE_TYPE _UseType, float _Unknown) {
-        if (m_pTheTrain is null) return;
-        
         if (m_bActivated) {
             g_EntityFuncs.Remove(self);
-            
             return;
         }
-        
+
         if (m_bActive) {
             TurnOff();
         } else {
             TurnOn();
+            m_flLastThinkTime = g_Engine.time;
         }
-        
+
         m_bActive = !m_bActive;
-    
-        m_pTheTrain.Use(_Activator, _Caller, _UseType, _Unknown);
     }
 }
 
@@ -2763,7 +2784,6 @@ class CDynamicAntiRushMap {
             
             g_rgpPathTracks.insertLast(EHandle(pEntity));
         }
-        for (uint idx = 0; idx < g_rgpPathTracks.length(); idx++) { if (g_rgpPathTracks[idx].IsValid()) { g_rgpPathTracks[idx].GetEntity().Activate(); } }
     }
     
     void PlaceKeys() {
@@ -3030,8 +3050,8 @@ CDynamicAntiRushMap@ AR_TryPlacingStuffIfMapExistsInList(string& in _MapName) {
             pMap.PlaceCounters();
             pMap.PlaceNumbers();
             pMap.PlaceSpeakers();
-            //pMap.PlacePathNodes();
-            //pMap.PlaceKeys();
+            pMap.PlacePathNodes();
+            pMap.PlaceKeys();
             pMap.PlacePadlocks();
             pMap.PlaceMultiManagers();
             pMap.PlaceSquadMakerHooks();
@@ -3059,8 +3079,6 @@ void AR_PlaceStuffMapActivate() {
         }
     }*/
     if (g_pCurrentMap is null) return;
-    g_pCurrentMap.PlacePathNodes();
-    g_pCurrentMap.PlaceKeys();
     g_pCurrentMap.MoveEnts();
     g_pCurrentMap.DeleteEntitiesByModel();
     g_pCurrentMap.PlaceKillCounters();
