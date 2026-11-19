@@ -1299,6 +1299,7 @@ class CEnvironmentFlyingKey : ScriptBaseAnimating {
         @m_pTheTrain = g_EntityFuncs.CreateEntity("func_tracktrain", @kvs, false);
         m_pTheTrain.pev.effects |= (EF_NOINTERP | EF_NODECALS | EF_NOANIMTEXTURES | EF_NODRAW);
         g_EntityFuncs.DispatchSpawn(m_pTheTrain.edict());
+        m_pTheTrain.Activate();
         m_pTheTrain.pev.mins = m_pTheTrain.pev.maxs = m_pTheTrain.pev.absmin = m_pTheTrain.pev.absmax = g_vecZero;
         m_pTheTrain.pev.effects |= (EF_NOINTERP | EF_NODECALS | EF_NOANIMTEXTURES | EF_NODRAW); //TBH I dunno if effects can be set pre-Spawn but I'm sure they can be set after Spawn, so yeah.
         
@@ -2762,6 +2763,7 @@ class CDynamicAntiRushMap {
             
             g_rgpPathTracks.insertLast(EHandle(pEntity));
         }
+        for (uint idx = 0; idx < g_rgpPathTracks.length(); idx++) { if (g_rgpPathTracks[idx].IsValid()) { g_rgpPathTracks[idx].GetEntity().Activate(); } }
     }
     
     void PlaceKeys() {
