@@ -1685,6 +1685,7 @@ class CDynamicEntitySpawner : ScriptBaseEntity {
     string m_lpszClassname;
     array<string> m_rgszKeyvalues;
     bool m_bDoMagicAtMapStart;
+    bool m_bDeferredCreate;
     array<EHandle> m_rghChildren;
     
     void RemoveChildren() {
@@ -1697,6 +1698,7 @@ class CDynamicEntitySpawner : ScriptBaseEntity {
     void Precache() {
         BaseClass.Precache();
         if (g_CustomEntityFuncs.IsCustomEntity(m_lpszClassname)) return;
+        if (m_lpszClassname == "func_tracktrain") return;
         g_Game.PrecacheOther(m_lpszClassname);
     }
     
@@ -1706,9 +1708,14 @@ class CDynamicEntitySpawner : ScriptBaseEntity {
         self.pev.solid = SOLID_NOT;
         
         m_rghChildren.resize(0);
+        m_bDeferredCreate = false;
         
         if (m_bDoMagicAtMapStart) {
-            CreateEntity();
+            if (m_lpszClassname == "func_tracktrain") {
+                m_bDeferredCreate = true;
+            } else {
+                CreateEntity();
+            }
         }
         
         self.pev.nextthink = g_Engine.time + 0.1f;
@@ -1749,6 +1756,10 @@ class CDynamicEntitySpawner : ScriptBaseEntity {
     }
     
     void Think() {
+        if (m_bDeferredCreate) {
+            m_bDeferredCreate = false;
+            CreateEntity();
+        }
         self.pev.nextthink = g_Engine.time + 5.0f;
     }
     
